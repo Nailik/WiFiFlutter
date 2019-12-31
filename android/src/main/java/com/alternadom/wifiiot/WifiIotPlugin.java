@@ -471,48 +471,31 @@ public class WifiIotPlugin implements MethodCallHandler, EventChannel.StreamHand
     /// Is important to enable only when communicating with the device via wifi
     /// and remember to disable it when disconnecting from device.
     private void forceWifiUsage(MethodCall poCall, Result poResult) {
-        boolean canWriteFlag = false;
+        //boolean canWriteFlag = false;
 
         boolean useWifi = poCall.argument("useWifi");
 
         if (useWifi) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                final ConnectivityManager manager = (ConnectivityManager) moContext
+                        .getSystemService(Context.CONNECTIVITY_SERVICE);
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    canWriteFlag = Settings.System.canWrite(moContext);
-
-                    if (!canWriteFlag) {
-                        Intent intent = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS);
-                        intent.setData(Uri.parse("package:" + moContext.getPackageName()));
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-
-                        moContext.startActivity(intent);
+                // get wifi network
+                final Network[] networks = manager.getAllNetworks();
+                Network network = null;
+                for (Network n : networks) {
+                    //getNetworkInfo() is  deprecated in API level 29, see https://developer.android.com/reference/android/net/ConnectivityManager.html#getNetworkInfo(android.net.Network)
+                    //getType() is deprecated in API 28, see https://developer.android.com/reference/android/net/NetworkInfo.html#getType()
+                    if (manager.getNetworkInfo(n).getType() == ConnectivityManager.TYPE_WIFI) {
+                        network = n;
+                        break;
                     }
                 }
 
-
-                if (((Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) && canWriteFlag) || ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) && !(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M))) {
-                    final ConnectivityManager manager = (ConnectivityManager) moContext
-                            .getSystemService(Context.CONNECTIVITY_SERVICE);
-                    NetworkRequest.Builder builder;
-                    builder = new NetworkRequest.Builder();
-                    /// set the transport type do WIFI
-                    builder.addTransportType(NetworkCapabilities.TRANSPORT_WIFI);
-
-                    if (manager != null) {
-                        manager.requestNetwork(builder.build(), new ConnectivityManager.NetworkCallback() {
-                            @Override
-                            public void onAvailable(Network network) {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                    manager.bindProcessToNetwork(network);
-                                    manager.unregisterNetworkCallback(this);
-                                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                                    ConnectivityManager.setProcessDefaultNetwork(network);
-                                    manager.unregisterNetworkCallback(this);
-                                }
-                            }
-                        });
-                    }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    manager.bindProcessToNetwork(network);
+                } else {
+                    ConnectivityManager.setProcessDefaultNetwork(network);
                 }
             }
         } else {
@@ -525,6 +508,7 @@ public class WifiIotPlugin implements MethodCallHandler, EventChannel.StreamHand
                 ConnectivityManager.setProcessDefaultNetwork(null);
             }
         }
+        
         poResult.success(null);
     }
 
